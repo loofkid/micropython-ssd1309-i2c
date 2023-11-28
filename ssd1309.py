@@ -3,6 +3,7 @@ from math import cos, sin, pi, radians
 from micropython import const
 from framebuf import FrameBuffer, GS8, MONO_HLSB, MONO_HMSB, MONO_VLSB
 from utime import sleep_ms
+from machine import I2C
 
 
 class Display(object):
@@ -58,21 +59,15 @@ class Display(object):
     
 
 
-    def __init__(self, spi, cs, dc, rst, width=128, height=64):
+    def __init__(self, i2c: I2C, address=0x3C, width=128, height=64):
         """Constructor for Display.
 
         Args:
-            spi (Class Spi):  SPI interface for display
-            cs (Class Pin):  Chip select pin
-            dc (Class Pin):  Data/Command pin
-            rst (Class Pin):  Reset pin
-            width (Optional int): Screen width (default 128)
-            height (Optional int): Screen height (default 64)
+            i2c (class): I2C object.
+            address (int): I2C address of display.
         """
-        self.spi = spi
-        self.cs = cs
-        self.dc = dc
-        self.rst = rst
+        self.i2c = i2c
+        self.address = address
         self.width = width
         self.height = height
         self.pages = self.height // 8
@@ -83,10 +78,6 @@ class Display(object):
         # Frame Buffer
         self.monoFB = FrameBuffer(self.mono_image, width, height, MONO_VLSB)
         self.clear_buffers()
-        # Initialize GPIO pins
-        self.cs.init(self.cs.OUT, value=1)
-        self.dc.init(self.dc.OUT, value=0)
-        self.rst.init(self.rst.OUT, value=1)
 
         self.reset()
         # Send initialization commands
@@ -853,13 +844,11 @@ class Display(object):
             command (byte): Display command code.
             *args (optional bytes): Data to transmit.
         """
-        self.dc(0)
-        self.cs(0)
-        self.spi.write(bytearray([command]))
+        self.i2c.writeto_mem(self.address, command, bytearray([command]))
         self.cs(1)
         # Handle any passed data
         if len(args) > 0:
-            self.write_data(bytearray(args))
+            self.i2c.writeto_mem(self.address, bytearray(args))
 
     def write_data(self, data):
         """Write data to display.
@@ -869,5 +858,5 @@ class Display(object):
         """
         self.dc(1)
         self.cs(0)
-        self.spi.write(data)
+        self.i2c.writeto_mem(self.address, data)
         self.cs(1)
